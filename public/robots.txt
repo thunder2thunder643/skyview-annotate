@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /projects
+Disallow: /upload
+Disallow: /label
+Disallow: /export
+Disallow: /settings
