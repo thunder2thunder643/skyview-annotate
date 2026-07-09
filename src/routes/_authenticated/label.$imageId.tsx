@@ -11,6 +11,7 @@ import { getImage, getAnnotations, signedUrl } from "@/lib/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { runRoboflowWorkflow } from "@/lib/roboflow.functions";
+import type { Json } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
@@ -159,7 +160,7 @@ function Studio() {
         annotation_type: s.annotation_type, geometry: s.geometry as unknown as object,
         confidence: s.confidence ?? null, source: s.source, status: s.status,
       }));
-      const { error } = await supabase.from("annotations").insert(rows);
+      const { error } = await supabase.from("annotations").insert(rows as never);
       if (error) return toast.error(error.message);
     }
     await supabase.from("images").update({ status: "labeled" }).eq("id", imageId);
