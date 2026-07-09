@@ -157,10 +157,10 @@ function Studio() {
     if (shapes.length) {
       const rows = shapes.map((s) => ({
         image_id: imageId, user_id: user.id, class_name: s.class_name,
-        annotation_type: s.annotation_type, geometry: s.geometry as unknown as object,
+        annotation_type: s.annotation_type, geometry: s.geometry as unknown as Json,
         confidence: s.confidence ?? null, source: s.source, status: s.status,
       }));
-      const { error } = await supabase.from("annotations").insert(rows as never);
+      const { error } = await supabase.from("annotations").insert(rows);
       if (error) return toast.error(error.message);
     }
     await supabase.from("images").update({ status: "labeled" }).eq("id", imageId);
