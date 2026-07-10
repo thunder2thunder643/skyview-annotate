@@ -1,16 +1,20 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
-import { UploadCloud, FileWarning, CheckCircle2, Loader2, ImageIcon } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { UploadCloud, FileWarning, CheckCircle2, Loader2, ImageIcon, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
-import { getProjects, getImages, ACCEPTED_EXT, BUCKET } from "@/lib/queries";
+import { getProjects, getImages, deleteImage, formatBytes, signedUrl, ACCEPTED_EXT, BUCKET } from "@/lib/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -23,10 +27,92 @@ export const Route = createFileRoute("/_authenticated/upload")({
 const MAX_SIZE = 500 * 1024 * 1024; // 500MB
 
 type QueueItem = { file: File; status: "pending" | "uploading" | "done" | "error"; progress: number; reason?: string };
+type ImageRow = Awaited<ReturnType<typeof getImages>>[number];
 
 function extOk(name: string) {
   const lower = name.toLowerCase();
   return ACCEPTED_EXT.some((e) => lower.endsWith(e));
+}
+
+const THUMBNAIL_EXT = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+
+function UploadedImageCard({ img, onDeleted }: { img: ImageRow; onDeleted: (id: string) => void }) {
+  const [thumb, setThumb] = useState<string>();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const canThumb = THUMBNAIL_EXT.some((e) => img.filename.toLowerCase().endsWith(e));
+
+  useEffect(() => {
+    if (canThumb) signedUrl(img.storage_path).then(setThumb).catch(() => setThumb(undefined));
+  }, [img.storage_path, canThumb]);
+
+  async function handleDelete() {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await deleteImage({ id: img.id, storage_path: img.storage_path });
+      toast.success("Image deleted successfully.");
+      setConfirmOpen(false);
+      onDeleted(img.id);
+    } catch (e) {
+      console.error("Failed to delete image", e);
+      toast.error("Couldn't delete this image. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-2 text-sm transition-colors hover:border-gold/40">
+      <Link
+        to="/label/$imageId" params={{ imageId: img.id }}
+        className="flex min-w-0 flex-1 items-center gap-3"
+      >
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted">
+          {thumb ? (
+            <img src={thumb} alt={img.filename} className="h-full w-full object-cover" />
+          ) : (
+            <ImageIcon className="h-5 w-5 text-muted-foreground" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium">{img.filename}</p>
+          <p className="text-xs text-muted-foreground">
+            {formatBytes(img.file_size)} · {new Date(img.created_at).toLocaleDateString()}
+          </p>
+          <Badge variant="secondary" className="mt-1">{img.status}</Badge>
+        </div>
+      </Link>
+      <AlertDialog open={confirmOpen} onOpenChange={(o) => !deleting && setConfirmOpen(o)}>
+        <Button
+          size="icon" variant="outline"
+          className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          title="Delete image" disabled={deleting}
+          onClick={() => setConfirmOpen(true)}
+        >
+          {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+        </Button>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Image?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete this uploaded image? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleDelete(); }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" /> Deleting…</> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
 }
 
 function UploadPage() {
