@@ -58,7 +58,7 @@ function Studio() {
   const [shapes, setShapes] = useState<Shape[]>([]);
   const [redo, setRedo] = useState<Shape[]>([]);
   const [draft, setDraft] = useState<{ x: number; y: number }[] | null>(null);
-  const [confidence, setConfidence] = useState(40);
+  const [confidence, setConfidence] = useState(50);
   const [aiBusy, setAiBusy] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -135,6 +135,14 @@ function Studio() {
       const preds = res.predictions.filter((p) => p.confidence * 100 >= confidence);
       const newShapes: Shape[] = preds.map((p) => {
         const nx = (v: number) => v / w, ny = (v: number) => v / h;
+        if (p.points && p.points.length >= 3) {
+          return {
+            class_name: p.class,
+            annotation_type: "polygon" as const,
+            geometry: { points: p.points.map((pt) => ({ x: nx(pt.x), y: ny(pt.y) })) },
+            confidence: p.confidence, source: "ai", status: "pending",
+          };
+        }
         return {
           class_name: p.class, annotation_type: "rectangle" as const,
           geometry: { points: [
@@ -145,9 +153,13 @@ function Studio() {
         };
       });
       setShapes((prev) => [...prev, ...newShapes]);
-      toast.success(`AI added ${newShapes.length} suggestion(s)`);
+      if (newShapes.length === 0) {
+        toast.info("No predictions above the confidence threshold");
+      } else {
+        toast.success(`AI added ${newShapes.length} suggestion(s)`);
+      }
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error("AI labeling failed. Please try again.");
     } finally { setAiBusy(false); }
   }
 
