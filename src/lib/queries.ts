@@ -72,3 +72,29 @@ export async function signedUrl(path: string) {
   if (error) throw error;
   return data.signedUrl;
 }
+
+/**
+ * Permanently delete an uploaded image and all associated records.
+ * RLS ensures only the owner can delete their own rows/objects.
+ * Order: annotations -> storage object -> image record.
+ */
+export async function deleteImage(image: { id: string; storage_path: string }) {
+  // Remove associated annotations (AI predictions + manual + cached inference).
+  const { error: annErr } = await supabase.from("annotations").delete().eq("image_id", image.id);
+  if (annErr) throw annErr;
+
+  // Remove the file from storage (ignore missing-object errors).
+  const { error: storageErr } = await supabase.storage.from(BUCKET).remove([image.storage_path]);
+  if (storageErr) throw storageErr;
+
+  // Remove the database record.
+  const { error: imgErr } = await supabase.from("images").delete().eq("id", image.id);
+  if (imgErr) throw imgErr;
+}
+
+export function formatBytes(bytes?: number | null) {
+  if (!bytes || bytes <= 0) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
