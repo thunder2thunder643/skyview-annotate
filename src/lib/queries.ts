@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const BUCKET = "satellite-images";
 
-export const ACCEPTED_EXT = [".cog", ".tif", ".tiff", ".jp2", ".kmz", ".nc"];
+export const ACCEPTED_EXT = [".cog", ".tif", ".tiff", ".jp2", ".kmz", ".nc", ".jpg", ".jpeg"];
 
 export async function getProjects() {
   const { data, error } = await supabase
