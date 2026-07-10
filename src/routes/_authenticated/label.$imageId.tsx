@@ -283,7 +283,9 @@ function Studio() {
               <div className="mb-1 flex justify-between text-xs text-muted-foreground"><span>Confidence</span><span>{confidence}%</span></div>
               <Slider value={[confidence]} min={0} max={100} step={5} onValueChange={(v) => setConfidence(v[0])} />
             </div>
-            <Button className="w-full" onClick={autoLabel} disabled={aiBusy || !url}>{aiBusy ? "Running…" : "Run AI"}</Button>
+            <Button className="w-full" onClick={autoLabel} disabled={aiBusy || !url}>
+              {aiBusy ? "Running…" : <><Sparkles className="mr-1 h-4 w-4" /> AI Label</>}
+            </Button>
             {aiBusy && (
               <div className="mt-3 space-y-1 rounded-md border border-gold/30 bg-gold/5 p-2 text-center">
                 <p className="text-xs font-medium text-gold">Running AI…</p>
