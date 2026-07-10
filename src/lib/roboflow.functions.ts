@@ -57,6 +57,7 @@ type Prediction = {
   y: number;
   width: number;
   height: number;
+  points?: { x: number; y: number }[] | null;
 };
 
 function extractPredictions(json: unknown): Prediction[] {
@@ -75,6 +76,16 @@ function extractPredictions(json: unknown): Prediction[] {
       typeof obj.width === "number" &&
       typeof obj.height === "number"
     ) {
+      const rawPoints = Array.isArray(obj.points) ? obj.points : null;
+      const points =
+        rawPoints
+          ?.map((p) => {
+            const pt = p as Record<string, unknown>;
+            return typeof pt?.x === "number" && typeof pt?.y === "number"
+              ? { x: pt.x, y: pt.y }
+              : null;
+          })
+          .filter((p): p is { x: number; y: number } => p !== null) ?? null;
       out.push({
         class: obj.class,
         confidence: typeof obj.confidence === "number" ? obj.confidence : 0,
@@ -82,6 +93,7 @@ function extractPredictions(json: unknown): Prediction[] {
         y: obj.y,
         width: obj.width,
         height: obj.height,
+        points: points && points.length >= 3 ? points : null,
       });
     }
     Object.values(obj).forEach(walk);
