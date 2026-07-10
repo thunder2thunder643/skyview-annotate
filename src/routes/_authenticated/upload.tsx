@@ -238,13 +238,16 @@ function UploadPage() {
           <h3 className="mb-3 font-semibold">In this project</h3>
           <div className="space-y-2">
             {(images ?? []).map((img) => (
-              <Link
-                key={img.id} to="/label/$imageId" params={{ imageId: img.id }}
-                className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2 text-sm hover:border-gold/40"
-              >
-                <span className="truncate">{img.filename}</span>
-                <Badge variant="secondary">{img.status}</Badge>
-              </Link>
+              <UploadedImageCard
+                key={img.id}
+                img={img}
+                onDeleted={(id) => {
+                  qc.setQueryData<ImageRow[]>(["images", projectId], (prev) =>
+                    (prev ?? []).filter((it) => it.id !== id),
+                  );
+                  qc.invalidateQueries({ queryKey: ["stats"] });
+                }}
+              />
             ))}
             {(!images || images.length === 0) && (
               <p className="text-sm text-muted-foreground">{projectId ? "No images yet." : "Select a project to see images."}</p>
