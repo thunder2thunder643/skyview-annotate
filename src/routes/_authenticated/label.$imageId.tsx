@@ -284,6 +284,13 @@ function Studio() {
               <Slider value={[confidence]} min={0} max={100} step={5} onValueChange={(v) => setConfidence(v[0])} />
             </div>
             <Button className="w-full" onClick={autoLabel} disabled={aiBusy || !url}>{aiBusy ? "Running…" : "Run AI"}</Button>
+            {aiBusy && (
+              <div className="mt-3 space-y-1 rounded-md border border-gold/30 bg-gold/5 p-2 text-center">
+                <p className="text-xs font-medium text-gold">Running AI…</p>
+                <p className="text-[11px] text-muted-foreground">Generating predictions…</p>
+                <p className="text-[11px] text-muted-foreground">This may take a few seconds…</p>
+              </div>
+            )}
           </div>
 
           <div className="rounded-xl border border-border bg-card p-4">
