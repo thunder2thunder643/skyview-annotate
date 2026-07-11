@@ -23,6 +23,24 @@ export const runRoboflowWorkflow = createServerFn({ method: "POST" })
 
     // If a workflow is configured, call the serverless workflow endpoint.
     if (workspace && workflowId) {
+      // Fetch the image server-side and send it as base64. Roboflow's URL
+      // fetcher can fail on signed URLs with encoded spaces/parens, returning
+      // "Could not decode bytes as image". Base64 sidesteps that entirely.
+      let imageInput: { type: string; value: string };
+      try {
+        const imgRes = await fetch(data.imageUrl);
+        if (!imgRes.ok) {
+          console.error(`Image fetch failed [${imgRes.status}] for ${data.imageUrl}`);
+          return { predictions: [], error: `Could not load image (${imgRes.status})` };
+        }
+        const buf = await imgRes.arrayBuffer();
+        const base64 = Buffer.from(buf).toString("base64");
+        imageInput = { type: "base64", value: base64 };
+      } catch (e) {
+        console.error("Image fetch threw:", e);
+        return { predictions: [], error: "Could not load image for inference" };
+      }
+
       const res = await fetch(
         `https://serverless.roboflow.com/infer/workflows/${workspace}/${workflowId}`,
         {
@@ -30,7 +48,7 @@ export const runRoboflowWorkflow = createServerFn({ method: "POST" })
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             api_key: apiKey,
-            inputs: { image: { type: "url", value: data.imageUrl } },
+            inputs: { image: imageInput },
           }),
         },
       );
