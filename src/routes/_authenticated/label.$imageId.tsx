@@ -408,6 +408,7 @@ function Studio() {
                 )}
                 {shapes.map((s, i) => {
                   if (s.hidden) return null;
+                  if (!passesConf(s)) return null;
                   const p = s.geometry.points;
                   const col = colorFor(s.class_name);
                   const isSel = selected === i, isHover = hover === i;
@@ -417,6 +418,17 @@ function Studio() {
                   const labelText = `${s.class_name}${conf}`;
                   const fontSize = 13 / view.zoom;
                   const handleR = 5 / view.zoom;
+                  const padX = 5 / view.zoom, padY = 3 / view.zoom;
+                  const labelW = labelText.length * fontSize * 0.6 + padX * 2;
+                  const labelH = fontSize + padY * 2;
+                  const rounded = 4 / view.zoom;
+                  // A colored pill with white text, anchored at the shape's top-left.
+                  const LabelPill = ({ lx, ly }: { lx: number; ly: number }) => (
+                    <g pointerEvents="none">
+                      <rect x={lx} y={ly - labelH} width={labelW} height={labelH} rx={rounded} ry={rounded} fill={col} />
+                      <text x={lx + padX} y={ly - padY - fontSize * 0.15} fill="#fff" fontSize={fontSize} className="font-semibold">{labelText}</text>
+                    </g>
+                  );
                   if (s.annotation_type === "rectangle") {
                     const x = Math.min(p[0].x, p[1].x) * W, y = Math.min(p[0].y, p[1].y) * H;
                     const w = Math.abs(p[1].x - p[0].x) * W, h = Math.abs(p[1].y - p[0].y) * H;
@@ -424,7 +436,7 @@ function Studio() {
                       <rect x={x} y={y} width={w} height={h} fill={col + fillOp} stroke={col} strokeWidth={sw}
                         strokeDasharray={s.source === "ai" ? `${6 / view.zoom} ${4 / view.zoom}` : undefined}
                         onMouseDown={(e) => { if (tool === "select") { e.stopPropagation(); setSelected(i); if (!s.locked) dragRef.current = { mode: "move", idx: i, last: pt(e) }; } }} />
-                      <text x={x + 4 / view.zoom} y={y - 5 / view.zoom} fill={col} fontSize={fontSize} className="font-medium">{labelText}</text>
+                      <LabelPill lx={x} ly={y - 2 / view.zoom} />
                       {isSel && tool === "select" && !s.locked && [0, 1].map((ci) => (
                         <rect key={ci} x={p[ci].x * W - handleR} y={p[ci].y * H - handleR} width={handleR * 2} height={handleR * 2}
                           fill="#fff" stroke={col} strokeWidth={1 / view.zoom} className="cursor-nwse-resize"
@@ -437,7 +449,7 @@ function Studio() {
                     <polygon points={ptsStr} fill={col + fillOp} stroke={col} strokeWidth={sw}
                       strokeDasharray={s.source === "ai" ? `${6 / view.zoom} ${4 / view.zoom}` : undefined}
                       onMouseDown={(e) => { if (tool === "select") { e.stopPropagation(); setSelected(i); if (!s.locked) dragRef.current = { mode: "move", idx: i, last: pt(e) }; } }} />
-                    <text x={p[0].x * W + 4 / view.zoom} y={p[0].y * H - 5 / view.zoom} fill={col} fontSize={fontSize} className="font-medium">{labelText}</text>
+                    <LabelPill lx={p[0].x * W} ly={p[0].y * H - 2 / view.zoom} />
                     {isSel && tool === "select" && !s.locked && p.map((q, vi) => (
                       <circle key={vi} cx={q.x * W} cy={q.y * H} r={handleR} fill="#fff" stroke={col} strokeWidth={1 / view.zoom} className="cursor-move"
                         onMouseDown={(e) => { e.stopPropagation(); dragRef.current = { mode: "vertex", idx: i, vi }; }} />
