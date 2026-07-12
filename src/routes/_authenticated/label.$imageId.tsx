@@ -37,7 +37,6 @@ type Shape = {
 };
 
 const LABELS = [
-const LABELS = [
   { name: "Plane", color: "#22c55e" },
   { name: "Airplane", color: "#eab308" },
   { name: "Helicopter", color: "#a855f7" },
