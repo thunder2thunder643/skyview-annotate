@@ -37,14 +37,24 @@ type Shape = {
 };
 
 const LABELS = [
-  { name: "Building", color: "#0EA5E9" },
-  { name: "Road", color: "#D4AF37" },
-  { name: "Vehicle", color: "#22c55e" },
-  { name: "Airport", color: "#a855f7" },
-  { name: "Ship", color: "#ef4444" },
+  { name: "Plane", color: "#22c55e" },
+  { name: "Airplane", color: "#eab308" },
+  { name: "Helicopter", color: "#a855f7" },
+  { name: "Airport", color: "#ef4444" },
+  { name: "Ship", color: "#06b6d4" },
   { name: "Bridge", color: "#f97316" },
+  { name: "Vehicle", color: "#3b82f6" },
+  { name: "Storage Tank", color: "#ec4899" },
 ];
-const colorFor = (c: string) => LABELS.find((l) => l.name.toLowerCase() === c.toLowerCase())?.color ?? "#0EA5E9";
+// Deterministic fallback palette so unknown classes keep a consistent color.
+const FALLBACK_PALETTE = ["#0EA5E9", "#D4AF37", "#84cc16", "#f43f5e", "#8b5cf6", "#14b8a6", "#f59e0b", "#e11d48"];
+const colorFor = (c: string) => {
+  const known = LABELS.find((l) => l.name.toLowerCase() === c.toLowerCase());
+  if (known) return known.color;
+  let h = 0;
+  for (let i = 0; i < c.length; i++) h = (h * 31 + c.charCodeAt(i)) >>> 0;
+  return FALLBACK_PALETTE[h % FALLBACK_PALETTE.length];
+};
 
 const W = 1000, H = 700;
 
@@ -112,11 +122,19 @@ function Studio() {
   function markDirty() { dirtyRef.current = true; }
   function pushShape(s: Shape) { setShapes((p) => [...p, s]); setRedo([]); markDirty(); }
 
+  // Live confidence filter: AI predictions below the threshold are hidden.
+  // Manual annotations (no confidence) always pass.
+  const passesConf = useCallback(
+    (s: Shape) => s.confidence == null || s.confidence * 100 >= confidence,
+    [confidence],
+  );
+
   // Hit test: return index of the topmost shape containing point p (normalized).
   function hitTest(p: { x: number; y: number }): number | null {
     for (let i = shapes.length - 1; i >= 0; i--) {
       const s = shapes[i];
       if (s.hidden) continue;
+      if (!passesConf(s)) continue;
       const pts = s.geometry.points;
       if (s.annotation_type === "rectangle") {
         const x0 = Math.min(pts[0].x, pts[1].x), x1 = Math.max(pts[0].x, pts[1].x);
@@ -390,6 +408,7 @@ function Studio() {
                 )}
                 {shapes.map((s, i) => {
                   if (s.hidden) return null;
+                  if (!passesConf(s)) return null;
                   const p = s.geometry.points;
                   const col = colorFor(s.class_name);
                   const isSel = selected === i, isHover = hover === i;
@@ -399,6 +418,17 @@ function Studio() {
                   const labelText = `${s.class_name}${conf}`;
                   const fontSize = 13 / view.zoom;
                   const handleR = 5 / view.zoom;
+                  const padX = 5 / view.zoom, padY = 3 / view.zoom;
+                  const labelW = labelText.length * fontSize * 0.6 + padX * 2;
+                  const labelH = fontSize + padY * 2;
+                  const rounded = 4 / view.zoom;
+                  // A colored pill with white text, anchored at the shape's top-left.
+                  const LabelPill = ({ lx, ly }: { lx: number; ly: number }) => (
+                    <g pointerEvents="none">
+                      <rect x={lx} y={ly - labelH} width={labelW} height={labelH} rx={rounded} ry={rounded} fill={col} />
+                      <text x={lx + padX} y={ly - padY - fontSize * 0.15} fill="#fff" fontSize={fontSize} className="font-semibold">{labelText}</text>
+                    </g>
+                  );
                   if (s.annotation_type === "rectangle") {
                     const x = Math.min(p[0].x, p[1].x) * W, y = Math.min(p[0].y, p[1].y) * H;
                     const w = Math.abs(p[1].x - p[0].x) * W, h = Math.abs(p[1].y - p[0].y) * H;
@@ -406,7 +436,7 @@ function Studio() {
                       <rect x={x} y={y} width={w} height={h} fill={col + fillOp} stroke={col} strokeWidth={sw}
                         strokeDasharray={s.source === "ai" ? `${6 / view.zoom} ${4 / view.zoom}` : undefined}
                         onMouseDown={(e) => { if (tool === "select") { e.stopPropagation(); setSelected(i); if (!s.locked) dragRef.current = { mode: "move", idx: i, last: pt(e) }; } }} />
-                      <text x={x + 4 / view.zoom} y={y - 5 / view.zoom} fill={col} fontSize={fontSize} className="font-medium">{labelText}</text>
+                      <LabelPill lx={x} ly={y - 2 / view.zoom} />
                       {isSel && tool === "select" && !s.locked && [0, 1].map((ci) => (
                         <rect key={ci} x={p[ci].x * W - handleR} y={p[ci].y * H - handleR} width={handleR * 2} height={handleR * 2}
                           fill="#fff" stroke={col} strokeWidth={1 / view.zoom} className="cursor-nwse-resize"
@@ -419,7 +449,7 @@ function Studio() {
                     <polygon points={ptsStr} fill={col + fillOp} stroke={col} strokeWidth={sw}
                       strokeDasharray={s.source === "ai" ? `${6 / view.zoom} ${4 / view.zoom}` : undefined}
                       onMouseDown={(e) => { if (tool === "select") { e.stopPropagation(); setSelected(i); if (!s.locked) dragRef.current = { mode: "move", idx: i, last: pt(e) }; } }} />
-                    <text x={p[0].x * W + 4 / view.zoom} y={p[0].y * H - 5 / view.zoom} fill={col} fontSize={fontSize} className="font-medium">{labelText}</text>
+                    <LabelPill lx={p[0].x * W} ly={p[0].y * H - 2 / view.zoom} />
                     {isSel && tool === "select" && !s.locked && p.map((q, vi) => (
                       <circle key={vi} cx={q.x * W} cy={q.y * H} r={handleR} fill="#fff" stroke={col} strokeWidth={1 / view.zoom} className="cursor-move"
                         onMouseDown={(e) => { e.stopPropagation(); dragRef.current = { mode: "vertex", idx: i, vi }; }} />
@@ -481,7 +511,8 @@ function Studio() {
                 <div key={i}
                   onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover((h) => (h === i ? null : h))}
                   className={cn("rounded-md border px-2 py-1.5 text-xs transition-colors",
-                    selected === i ? "border-gold bg-gold/5" : "border-border hover:bg-muted/50")}>
+                    selected === i ? "border-gold bg-gold/5" : "border-border hover:bg-muted/50",
+                    !passesConf(s) && "opacity-40")}>
                   <div className="flex items-center justify-between gap-1">
                     <button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => focusShape(i)}>
                       <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorFor(s.class_name) }} />
