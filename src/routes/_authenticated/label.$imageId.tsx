@@ -58,6 +58,33 @@ const colorFor = (c: string) => {
 
 const W = 1000, H = 700;
 
+// --- Independent annotation label ------------------------------------------
+// Renders a colored pill with white text pinned to a bounding box's top-left
+// corner. Lives inside the zoom/pan <g>, so it moves with its box during zoom,
+// pan, drag and resize. If the pill would overflow the top of the image it is
+// tucked just inside the top edge of the box instead.
+function AnnotationLabel({
+  x, y, text, color, zoom, onSelect,
+}: {
+  x: number; y: number; text: string; color: string; zoom: number;
+  onSelect: (e: React.MouseEvent) => void;
+}) {
+  const fontSize = 13 / zoom;
+  const padX = 5 / zoom, padY = 3 / zoom, rounded = 4 / zoom;
+  const labelW = text.length * fontSize * 0.6 + padX * 2; // fit-content width
+  const labelH = fontSize + padY * 2;
+  const above = y - labelH;
+  const ly = above < 0 ? y : above;
+  return (
+    <g className="cursor-pointer" onMouseDown={onSelect}>
+      <rect x={x} y={ly} width={labelW} height={labelH} rx={rounded} ry={rounded} fill={color} />
+      <text x={x + padX} y={ly + labelH - padY - fontSize * 0.15} fill="#fff" fontSize={fontSize} className="font-semibold pointer-events-none">
+        {text}
+      </text>
+    </g>
+  );
+}
+
 function Studio() {
   const { imageId } = Route.useParams();
   const qc = useQueryClient();
@@ -416,19 +443,9 @@ function Studio() {
                   const fillOp = isSel || isHover ? "40" : "33";
                   const conf = s.source === "ai" && s.confidence != null ? ` (${Math.round(s.confidence * 100)}%)` : "";
                   const labelText = `${s.class_name}${conf}`;
-                  const fontSize = 13 / view.zoom;
                   const handleR = 5 / view.zoom;
-                  const padX = 5 / view.zoom, padY = 3 / view.zoom;
-                  const labelW = labelText.length * fontSize * 0.6 + padX * 2;
-                  const labelH = fontSize + padY * 2;
-                  const rounded = 4 / view.zoom;
-                  // A colored pill with white text, anchored at the shape's top-left.
-                  const LabelPill = ({ lx, ly }: { lx: number; ly: number }) => (
-                    <g pointerEvents="none">
-                      <rect x={lx} y={ly - labelH} width={labelW} height={labelH} rx={rounded} ry={rounded} fill={col} />
-                      <text x={lx + padX} y={ly - padY - fontSize * 0.15} fill="#fff" fontSize={fontSize} className="font-semibold">{labelText}</text>
-                    </g>
-                  );
+                  // Selecting via the attached label picks only this annotation.
+                  const selectThis = (e: React.MouseEvent) => { e.stopPropagation(); setSelected(i); };
                   if (s.annotation_type === "rectangle") {
                     const x = Math.min(p[0].x, p[1].x) * W, y = Math.min(p[0].y, p[1].y) * H;
                     const w = Math.abs(p[1].x - p[0].x) * W, h = Math.abs(p[1].y - p[0].y) * H;
@@ -436,7 +453,7 @@ function Studio() {
                       <rect x={x} y={y} width={w} height={h} fill={col + fillOp} stroke={col} strokeWidth={sw}
                         strokeDasharray={s.source === "ai" ? `${6 / view.zoom} ${4 / view.zoom}` : undefined}
                         onMouseDown={(e) => { if (tool === "select") { e.stopPropagation(); setSelected(i); if (!s.locked) dragRef.current = { mode: "move", idx: i, last: pt(e) }; } }} />
-                      <LabelPill lx={x} ly={y - 2 / view.zoom} />
+                      <AnnotationLabel x={x} y={y} text={labelText} color={col} zoom={view.zoom} onSelect={selectThis} />
                       {isSel && tool === "select" && !s.locked && [0, 1].map((ci) => (
                         <rect key={ci} x={p[ci].x * W - handleR} y={p[ci].y * H - handleR} width={handleR * 2} height={handleR * 2}
                           fill="#fff" stroke={col} strokeWidth={1 / view.zoom} className="cursor-nwse-resize"
@@ -445,11 +462,12 @@ function Studio() {
                     </g>;
                   }
                   const ptsStr = p.map((q) => `${q.x * W},${q.y * H}`).join(" ");
+                  const px0 = Math.min(...p.map((q) => q.x)) * W, py0 = Math.min(...p.map((q) => q.y)) * H;
                   return <g key={i}>
                     <polygon points={ptsStr} fill={col + fillOp} stroke={col} strokeWidth={sw}
                       strokeDasharray={s.source === "ai" ? `${6 / view.zoom} ${4 / view.zoom}` : undefined}
                       onMouseDown={(e) => { if (tool === "select") { e.stopPropagation(); setSelected(i); if (!s.locked) dragRef.current = { mode: "move", idx: i, last: pt(e) }; } }} />
-                    <LabelPill lx={p[0].x * W} ly={p[0].y * H - 2 / view.zoom} />
+                    <AnnotationLabel x={px0} y={py0} text={labelText} color={col} zoom={view.zoom} onSelect={selectThis} />
                     {isSel && tool === "select" && !s.locked && p.map((q, vi) => (
                       <circle key={vi} cx={q.x * W} cy={q.y * H} r={handleR} fill="#fff" stroke={col} strokeWidth={1 / view.zoom} className="cursor-move"
                         onMouseDown={(e) => { e.stopPropagation(); dragRef.current = { mode: "vertex", idx: i, vi }; }} />
