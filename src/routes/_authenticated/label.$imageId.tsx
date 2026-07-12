@@ -37,14 +37,25 @@ type Shape = {
 };
 
 const LABELS = [
-  { name: "Building", color: "#0EA5E9" },
-  { name: "Road", color: "#D4AF37" },
-  { name: "Vehicle", color: "#22c55e" },
-  { name: "Airport", color: "#a855f7" },
-  { name: "Ship", color: "#ef4444" },
+const LABELS = [
+  { name: "Plane", color: "#22c55e" },
+  { name: "Airplane", color: "#eab308" },
+  { name: "Helicopter", color: "#a855f7" },
+  { name: "Airport", color: "#ef4444" },
+  { name: "Ship", color: "#06b6d4" },
   { name: "Bridge", color: "#f97316" },
+  { name: "Vehicle", color: "#3b82f6" },
+  { name: "Storage Tank", color: "#ec4899" },
 ];
-const colorFor = (c: string) => LABELS.find((l) => l.name.toLowerCase() === c.toLowerCase())?.color ?? "#0EA5E9";
+// Deterministic fallback palette so unknown classes keep a consistent color.
+const FALLBACK_PALETTE = ["#0EA5E9", "#D4AF37", "#84cc16", "#f43f5e", "#8b5cf6", "#14b8a6", "#f59e0b", "#e11d48"];
+const colorFor = (c: string) => {
+  const known = LABELS.find((l) => l.name.toLowerCase() === c.toLowerCase());
+  if (known) return known.color;
+  let h = 0;
+  for (let i = 0; i < c.length; i++) h = (h * 31 + c.charCodeAt(i)) >>> 0;
+  return FALLBACK_PALETTE[h % FALLBACK_PALETTE.length];
+};
 
 const W = 1000, H = 700;
 
