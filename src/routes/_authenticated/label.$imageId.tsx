@@ -511,7 +511,8 @@ function Studio() {
                 <div key={i}
                   onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover((h) => (h === i ? null : h))}
                   className={cn("rounded-md border px-2 py-1.5 text-xs transition-colors",
-                    selected === i ? "border-gold bg-gold/5" : "border-border hover:bg-muted/50")}>
+                    selected === i ? "border-gold bg-gold/5" : "border-border hover:bg-muted/50",
+                    !passesConf(s) && "opacity-40")}>
                   <div className="flex items-center justify-between gap-1">
                     <button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => focusShape(i)}>
                       <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorFor(s.class_name) }} />
