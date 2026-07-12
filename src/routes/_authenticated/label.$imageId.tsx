@@ -122,11 +122,19 @@ function Studio() {
   function markDirty() { dirtyRef.current = true; }
   function pushShape(s: Shape) { setShapes((p) => [...p, s]); setRedo([]); markDirty(); }
 
+  // Live confidence filter: AI predictions below the threshold are hidden.
+  // Manual annotations (no confidence) always pass.
+  const passesConf = useCallback(
+    (s: Shape) => s.confidence == null || s.confidence * 100 >= confidence,
+    [confidence],
+  );
+
   // Hit test: return index of the topmost shape containing point p (normalized).
   function hitTest(p: { x: number; y: number }): number | null {
     for (let i = shapes.length - 1; i >= 0; i--) {
       const s = shapes[i];
       if (s.hidden) continue;
+      if (!passesConf(s)) continue;
       const pts = s.geometry.points;
       if (s.annotation_type === "rectangle") {
         const x0 = Math.min(pts[0].x, pts[1].x), x1 = Math.max(pts[0].x, pts[1].x);
