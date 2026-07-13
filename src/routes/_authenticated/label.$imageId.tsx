@@ -18,6 +18,7 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { AnnotationLabel, labelAnchor } from "@/lib/annotation-render";
 
 export const Route = createFileRoute("/_authenticated/label/$imageId")({
   component: Studio,
@@ -57,33 +58,6 @@ const colorFor = (c: string) => {
 };
 
 const W = 1000, H = 700;
-
-// --- Independent annotation label ------------------------------------------
-// Renders a colored pill with white text pinned to a bounding box's top-left
-// corner. Lives inside the zoom/pan <g>, so it moves with its box during zoom,
-// pan, drag and resize. If the pill would overflow the top of the image it is
-// tucked just inside the top edge of the box instead.
-function AnnotationLabel({
-  x, y, text, color, zoom, onSelect,
-}: {
-  x: number; y: number; text: string; color: string; zoom: number;
-  onSelect: (e: React.MouseEvent) => void;
-}) {
-  const fontSize = 13 / zoom;
-  const padX = 5 / zoom, padY = 3 / zoom, rounded = 4 / zoom;
-  const labelW = text.length * fontSize * 0.6 + padX * 2; // fit-content width
-  const labelH = fontSize + padY * 2;
-  const above = y - labelH;
-  const ly = above < 0 ? y : above;
-  return (
-    <g className="cursor-pointer" onMouseDown={onSelect}>
-      <rect x={x} y={ly} width={labelW} height={labelH} rx={rounded} ry={rounded} fill={color} />
-      <text x={x + padX} y={ly + labelH - padY - fontSize * 0.15} fill="#fff" fontSize={fontSize} className="font-semibold pointer-events-none">
-        {text}
-      </text>
-    </g>
-  );
-}
 
 function Studio() {
   const { imageId } = Route.useParams();
@@ -462,7 +436,7 @@ function Studio() {
                     </g>;
                   }
                   const ptsStr = p.map((q) => `${q.x * W},${q.y * H}`).join(" ");
-                  const px0 = Math.min(...p.map((q) => q.x)) * W, py0 = Math.min(...p.map((q) => q.y)) * H;
+                  const { x: px0, y: py0 } = labelAnchor(p, W, H);
                   return <g key={i}>
                     <polygon points={ptsStr} fill={col + fillOp} stroke={col} strokeWidth={sw}
                       strokeDasharray={s.source === "ai" ? `${6 / view.zoom} ${4 / view.zoom}` : undefined}
