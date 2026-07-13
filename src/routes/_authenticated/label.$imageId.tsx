@@ -436,7 +436,7 @@ function Studio() {
                     </g>;
                   }
                   const ptsStr = p.map((q) => `${q.x * W},${q.y * H}`).join(" ");
-                  const px0 = Math.min(...p.map((q) => q.x)) * W, py0 = Math.min(...p.map((q) => q.y)) * H;
+                  const { x: px0, y: py0 } = labelAnchor(p, W, H);
                   return <g key={i}>
                     <polygon points={ptsStr} fill={col + fillOp} stroke={col} strokeWidth={sw}
                       strokeDasharray={s.source === "ai" ? `${6 / view.zoom} ${4 / view.zoom}` : undefined}
