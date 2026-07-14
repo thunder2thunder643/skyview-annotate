@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { PenTool, Trash2, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
@@ -28,6 +28,8 @@ function LabelIndex() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Pending soft-deletes awaiting undo window. Keyed by toast id so we can commit/cancel.
+  const pendingRef = useRef<Map<string | number, { targets: typeof list; timer: ReturnType<typeof setTimeout> }>>(new Map());
 
   const list = images ?? [];
   const allSelected = useMemo(
@@ -47,31 +49,62 @@ function LabelIndex() {
 
   const exitSelect = () => { setSelectMode(false); setSelected(new Set()); };
 
-  async function bulkDelete() {
+  // Bulk "delete" is deferred: hide immediately, show an Undo snackbar,
+  // and only hit the server when the toast auto-closes without undo.
+  function bulkDelete() {
     if (deleting || selected.size === 0) return;
-    setDeleting(true);
-    const targets = list.filter((i) => selected.has(i.id));
-    // Optimistically remove from the cached list, then sync each deletion.
-    const prev = qc.getQueryData(["images", undefined]);
+    const ids = new Set(selected);
+    const targets = list.filter((i) => ids.has(i.id));
+    if (targets.length === 0) return;
+
+    // Optimistic hide from the cached list.
     qc.setQueryData(["images", undefined], (old: typeof images) =>
-      (old ?? []).filter((i) => !selected.has(i.id)),
+      (old ?? []).filter((i) => !ids.has(i.id)),
     );
-    const results = await Promise.allSettled(
-      targets.map((img) => deleteImage({ id: img.id, storage_path: img.storage_path })),
-    );
-    const failed = results.filter((r) => r.status === "rejected").length;
-    if (failed) {
-      console.error("Some images failed to delete", results);
-      qc.setQueryData(["images", undefined], prev); // roll back and refetch truth
-      await qc.invalidateQueries({ queryKey: ["images"] });
-      toast.error(`Couldn't delete ${failed} image${failed > 1 ? "s" : ""}. Please try again.`);
-    } else {
-      toast.success(`Deleted ${targets.length} image${targets.length > 1 ? "s" : ""}.`);
-    }
-    await qc.invalidateQueries({ queryKey: ["images"] });
-    setDeleting(false);
     setConfirmOpen(false);
     exitSelect();
+
+    const UNDO_MS = 6000;
+    const label = `Deleted ${targets.length} image${targets.length > 1 ? "s" : ""}`;
+
+    const id = toast(label, {
+      description: "Undo within a few seconds to restore.",
+      duration: UNDO_MS,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          const entry = pendingRef.current.get(id);
+          if (!entry) return;
+          clearTimeout(entry.timer);
+          pendingRef.current.delete(id);
+          // Restore into cache preserving original ordering.
+          qc.setQueryData(["images", undefined], (old: typeof images) => {
+            const cur = old ?? [];
+            const merged = [...cur, ...entry.targets];
+            const order = new Map((images ?? []).map((img, i) => [img.id, i] as const));
+            return merged.sort(
+              (a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0),
+            );
+          });
+          toast.success(`Restored ${entry.targets.length} image${entry.targets.length > 1 ? "s" : ""}`);
+        },
+      },
+    });
+
+    const timer = setTimeout(async () => {
+      pendingRef.current.delete(id);
+      const results = await Promise.allSettled(
+        targets.map((img) => deleteImage({ id: img.id, storage_path: img.storage_path })),
+      );
+      const failed = results.filter((r) => r.status === "rejected").length;
+      if (failed) {
+        console.error("Some images failed to delete", results);
+        toast.error(`Couldn't delete ${failed} image${failed > 1 ? "s" : ""}. Refreshing list.`);
+      }
+      await qc.invalidateQueries({ queryKey: ["images"] });
+    }, UNDO_MS);
+
+    pendingRef.current.set(id, { targets, timer });
   }
 
   return (
