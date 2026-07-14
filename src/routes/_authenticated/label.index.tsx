@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { PenTool, Trash2, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/AppShell";
