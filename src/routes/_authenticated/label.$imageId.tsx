@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { AnnotationLabel, labelAnchor } from "@/lib/annotation-render";
 
@@ -79,6 +80,8 @@ function Studio() {
   const [aiBusy, setAiBusy] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
   const [hover, setHover] = useState<number | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [multiSel, setMultiSel] = useState<Set<number>>(new Set());
   const [view, setView] = useState({ zoom: 1, x: 0, y: 0 });
   const svgRef = useRef<SVGSVGElement>(null);
   const dragRef = useRef<
@@ -217,6 +220,24 @@ function Studio() {
   function undo() { setShapes((p) => { if (!p.length) return p; const last = p[p.length - 1]; setRedo((r) => [...r, last]); return p.slice(0, -1); }); markDirty(); scheduleSave(); }
   function redoFn() { setRedo((r) => { if (!r.length) return r; const last = r[r.length - 1]; setShapes((p) => [...p, last]); return r.slice(0, -1); }); markDirty(); scheduleSave(); }
   function del(i: number) { setShapes((p) => p.filter((_, idx) => idx !== i)); setSelected(null); markDirty(); scheduleSave(); }
+  function bulkDeleteAnnotations() {
+    if (multiSel.size === 0) return;
+    const n = multiSel.size;
+    setShapes((p) => p.filter((_, idx) => !multiSel.has(idx)));
+    setMultiSel(new Set());
+    setSelectMode(false);
+    setSelected(null);
+    markDirty();
+    scheduleSave();
+    toast.success(`Deleted ${n} annotation${n > 1 ? "s" : ""}`);
+  }
+  function toggleMulti(i: number) {
+    setMultiSel((prev) => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  }
   function toggleHidden(i: number) { setShapes((p) => p.map((s, idx) => idx === i ? { ...s, hidden: !s.hidden } : s)); }
   function toggleLocked(i: number) { setShapes((p) => p.map((s, idx) => idx === i ? { ...s, locked: !s.locked } : s)); }
   function renameClass(i: number, name: string) { setShapes((p) => p.map((s, idx) => idx === i ? { ...s, class_name: name } : s)); markDirty(); scheduleSave(); }
@@ -494,7 +515,27 @@ function Studio() {
           </div>
 
           <div className="rounded-xl border border-border bg-card p-4">
-            <h3 className="mb-3 text-sm font-semibold">Annotations ({shapes.length})</h3>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Annotations ({shapes.length})</h3>
+              {selectMode ? (
+                <div className="flex items-center gap-1">
+                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                    onClick={() => setMultiSel(multiSel.size === shapes.length ? new Set() : new Set(shapes.map((_, i) => i)))}
+                    disabled={shapes.length === 0}>
+                    {multiSel.size === shapes.length && shapes.length > 0 ? "Clear" : "All"}
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={bulkDeleteAnnotations} disabled={multiSel.size === 0}>
+                    <Trash2 className="mr-1 h-3 w-3" /> {multiSel.size || ""}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                    onClick={() => { setSelectMode(false); setMultiSel(new Set()); }}>Cancel</Button>
+                </div>
+              ) : (
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                  onClick={() => setSelectMode(true)} disabled={shapes.length === 0}>Select</Button>
+              )}
+            </div>
             <div className="mb-3 flex flex-wrap gap-1">
               {Object.entries(counts).map(([k, v]) => <Badge key={k} variant="secondary">{k}: {v}</Badge>)}
             </div>
@@ -503,10 +544,19 @@ function Studio() {
                 <div key={i}
                   onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover((h) => (h === i ? null : h))}
                   className={cn("rounded-md border px-2 py-1.5 text-xs transition-colors",
-                    selected === i ? "border-gold bg-gold/5" : "border-border hover:bg-muted/50",
+                    (selectMode ? multiSel.has(i) : selected === i) ? "border-gold bg-gold/5" : "border-border hover:bg-muted/50",
                     !passesConf(s) && "opacity-40")}>
                   <div className="flex items-center justify-between gap-1">
-                    <button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => focusShape(i)}>
+                    {selectMode && (
+                      <Checkbox
+                        checked={multiSel.has(i)}
+                        onCheckedChange={() => toggleMulti(i)}
+                        aria-label={`Select ${s.class_name}`}
+                        className="mr-1"
+                      />
+                    )}
+                    <button className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      onClick={() => (selectMode ? toggleMulti(i) : focusShape(i))}>
                       <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorFor(s.class_name) }} />
                       <span className="truncate">{s.class_name}</span>
                       {s.source === "ai" && <Badge variant="outline" className="h-4 px-1 text-[10px]">AI</Badge>}
